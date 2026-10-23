@@ -32,7 +32,7 @@ CRITICAL_PAYLOAD = {
 def _intercept_insights(page: Page, payload: dict) -> None:
     """Force deterministic /api/insights response."""
     page.route(
-        "**/api/insights",
+        "**/api/insights*",
         lambda route: route.fulfill(
             status=200,
             content_type="application/json",
