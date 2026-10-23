@@ -158,6 +158,45 @@ async def health() -> dict[str, Any]:
     return {"ok": True, "service": "novasphere", "version": "0.1.0", "clients": len(manager.active)}
 
 
+@app.post("/api/ai/analyze", response_model=None)
+async def ai_analyze(payload: dict[str, Any]):
+    events = payload.get("events", []) or []
+    metrics = payload.get("metrics", {}) or {}
+    last = events[-10:]
+    levels = {}
+    for ev in last:
+        lvl = ev.get("level", "info")
+        levels[lvl] = levels.get(lvl, 0) + 1
+    msgs = [str(ev.get("msg", "")) for ev in last]
+    errors = [m for m in msgs if "error" in m.lower() or "spike" in m.lower() or "threshold" in m.lower()]
+    cpu = metrics.get("cpu")
+    mem = metrics.get("mem")
+    rps = metrics.get("req_per_sec")
+    lat = metrics.get("latency_ms")
+    insights = []
+    if levels.get("error", 0) > 0:
+        insights.append(f"Detected {levels['error']} error event(s) in the last 10 — investigate immediately.")
+    if levels.get("warn", 0) > 0:
+        insights.append(f"{levels['warn']} warning(s) observed — review event log.")
+    if cpu is not None and cpu > 80:
+        insights.append(f"CPU is high ({cpu}%) — consider scaling or throttling agents.")
+    if mem is not None and mem > 80:
+        insights.append(f"Memory pressure ({mem}%) — check for leaks or reduce load.")
+    if lat is not None and lat > 90:
+        insights.append(f"Latency elevated ({lat}ms) — optimize hot paths.")
+    if rps is not None and rps > 300:
+        insights.append(f"High throughput ({rps} req/s) — ensure rate limits are in place.")
+    if not insights:
+        insights.append("System looks healthy — no anomalies in the last 10 events.")
+    summary = " | ".join(insights)
+    return {
+        "ok": True,
+        "summary": summary,
+        "insights": insights,
+        "stats": {"events": len(last), "levels": levels, "cpu": cpu, "mem": mem, "rps": rps, "latency": lat},
+    }
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket) -> None:
     await manager.connect(ws)
