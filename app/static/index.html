@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>رقيب — تحليلات فورية</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+  <script src="/static/js/chart.umd.js"></script>
+  <script defer src="/static/js/alpine.min.js"></script>
   <script defer src="/static/js/runbook-ui.js"></script>
   <style>
     [x-cloak] { display: none !important; }
@@ -27,7 +27,7 @@
     .metric-value { font-variant-numeric: tabular-nums; }
   </style>
 </head>
-<body class="text-slate-200" x-data="{ ...runbookUI(), ...raqibApp() }" x-cloak>
+<body class="text-slate-200" x-data="{ ...runbookUI(), ...raqibApp() }">
 
   <!-- AUTH VIEW -->
   <div x-show="!authenticated" x-transition class="min-h-screen flex items-center justify-center p-4">
