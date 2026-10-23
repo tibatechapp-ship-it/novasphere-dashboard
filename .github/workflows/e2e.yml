@@ -28,8 +28,8 @@ jobs:
           alembic upgrade head
           uvicorn app.main:app --port 8080 &
           sleep 3
-          curl -s -X POST -d "username=e2euser&password=secret123" http://localhost:8080/api/auth/signup || true
+          curl -s -X POST -d "username=e2euser&password=secret123" http://127.0.0.1:8080/api/auth/signup || true
       - name: Run E2E
         env:
-          E2E_BASE_URL: http://localhost:8080
+          E2E_BASE_URL: http://127.0.0.1:8080
         run: pytest tests/e2e -v
