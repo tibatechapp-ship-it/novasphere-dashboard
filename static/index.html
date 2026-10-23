@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NovaSphere — Cyberpunk Dashboard</title>
+<style>
+:root{
+  --bg:#05060f;--panel:#0b0f1f;--panel2:#111629;--neon:#00f0ff;--neon2:#ff2bd6;
+  --neon3:#7cff6b;--warn:#ffb347;--err:#ff4d6d;--text:#e6f1ff;--muted:#6b7a99;
+  --border:#1f2a4a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
+body::before{content:"";position:fixed;inset:0;background:
+  radial-gradient(circle at 20% 10%,rgba(0,240,255,.08),transparent 40%),
+  radial-gradient(circle at 80% 90%,rgba(255,43,214,.08),transparent 40%);pointer-events:none;z-index:0}
+.grid-bg{position:fixed;inset:0;background-image:linear-gradient(rgba(0,240,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,240,255,.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.app{position:relative;z-index:1;display:grid;grid-template-rows:60px 1fr 140px;height:100vh;gap:8px;padding:8px}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:linear-gradient(90deg,var(--panel),var(--panel2));border:1px solid var(--border);border-radius:8px;box-shadow:0 0 20px rgba(0,240,255,.15)}
+.logo{font-size:22px;font-weight:800;letter-spacing:2px;background:linear-gradient(90deg,var(--neon),var(--neon2));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 12px rgba(0,240,255,.4)}
+.status{display:flex;gap:16px;font-size:12px;color:var(--muted)}
+.status b{color:var(--neon3);font-family:monospace}
+.pill{padding:4px 10px;border:1px solid var(--neon);border-radius:20px;color:var(--neon);font-size:11px;box-shadow:0 0 8px rgba(0,240,255,.3)}
+.pill.live{animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.main{display:grid;grid-template-columns:1fr 320px;gap:8px;overflow:hidden}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;overflow:auto;box-shadow:0 0 16px rgba(0,240,255,.08)}
+.panel h3{font-size:13px;color:var(--neon);margin-bottom:10px;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.metric{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center}
+.metric .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.metric .value{font-size:26px;font-weight:700;color:var(--neon);text-shadow:0 0 10px rgba(0,240,255,.5);margin-top:4px;font-family:monospace}
+.agents{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.agent{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:8px;transition:all .2s}
+.agent:hover{border-color:var(--neon);box-shadow:0 0 12px rgba(0,240,255,.2)}
+.agent .name{font-weight:700;font-size:13px;color:var(--text)}
+.agent .group{font-size:10px;color:var(--muted);text-transform:uppercase}
+.agent .bar{height:4px;background:#1a2240;border-radius:2px;margin:6px 0;overflow:hidden}
+.agent .bar>div{height:100%;background:linear-gradient(90deg,var(--neon),var(--neon2));transition:width .3s}
+.agent .meta{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);font-family:monospace}
+.agent.online .dot{background:var(--neon3);box-shadow:0 0 6px var(--neon3)}
+.agent.busy .dot{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.agent.idle .dot{background:var(--muted)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.log{height:100%;font-family:monospace;font-size:11px;overflow-y:auto}
+.log .entry{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;gap:8px}
+.log .ts{color:var(--muted);min-width:60px}
+.log .lvl-info{color:var(--neon)}
+.log .lvl-warn{color:var(--warn)}
+.log .lvl-error{color:var(--err)}
+.footer{display:flex;align-items:center;gap:12px;padding:0 12px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--muted)}
+.footer b{color:var(--neon)}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="app">
+  <header class="topbar">
+    <div class="logo">NovaSphere</div>
+    <div class="status">
+      <span>WS: <b id="wsStatus">connecting…</b></span>
+      <span>Clients: <b id="clients">0</b></span>
+      <span>CPU: <b id="cpuTop">—</b></span>
+    </div>
+    <div class="pill live" id="livePill">● LIVE</div>
+  </header>
+  <div class="main">
+    <div class="panel">
+      <h3>System Metrics</h3>
+      <div class="metrics">
+        <div class="metric"><div class="label">CPU</div><div class="value" id="cpu">—</div></div>
+        <div class="metric"><div class="label">Memory</div><div class="value" id="mem">—</div></div>
+        <div class="metric"><div class="label">Req/s</div><div class="value" id="rps">—</div></div>
+        <div class="metric"><div class="label">Latency</div><div class="value" id="lat">—</div></div>
+      </div>
+      <h3>Agents</h3>
+      <div class="agents" id="agents"></div>
+    </div>
+    <div class="panel">
+      <h3>Event Log</h3>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+  <footer class="footer">
+    <span>NovaSphere v0.1.0</span>
+    <span>·</span>
+    <span>FastAPI + WebSockets</span>
+    <span>·</span>
+    <span>Update: <b id="upd">—</b></span>
+  </footer>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let ws;
+function connect() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(proto + "//" + location.host + "/ws");
+  ws.onopen = () => { $("wsStatus").textContent = "connected"; $("wsStatus").style.color = "#7cff6b"; };
+  ws.onclose = () => { $("wsStatus").textContent = "disconnected"; $("wsStatus").style.color = "#ff4d6d"; setTimeout(connect, 2000); };
+  ws.onmessage = e => {
+    try { render(JSON.parse(e.data)); } catch (err) { console.error(err); }
+  };
+}
+function render(d) {
+  $("cpu").textContent = d.cpu + "%";
+  $("mem").textContent = d.mem + "%";
+  $("rps").textContent = d.req_per_sec;
+  $("lat").textContent = d.latency_ms + "ms";
+  $("cpuTop").textContent = d.cpu + "%";
+  $("upd").textContent = new Date(d.ts*1000).toLocaleTimeString();
+  // agents
+  const box = $("agents");
+  box.innerHTML = "";
+  for (const a of d.agents) {
+    const el = document.createElement("div");
+    el.className = "agent " + a.status;
+    el.innerHTML = `<div><span class="dot"></span><span class="name">${a.name}</span></div>
+      <div class="group">${a.group} · ${a.id}</div>
+      <div class="bar"><div style="width:${a.load}%"></div></div>
+      <div class="meta"><span>load ${a.load}%</span><span>tasks ${a.tasks}</span></div>`;
+    box.appendChild(el);
+  }
+  // log
+  const log = $("log");
+  log.innerHTML = "";
+  for (const ev of d.events) {
+    const e = document.createElement("div");
+    e.className = "entry";
+    e.innerHTML = `<span class="ts">${new Date(ev.ts*1000).toLocaleTimeString()}</span><span class="lvl-${ev.level}">${ev.level.toUpperCase()}</span><span>${ev.msg}</span>`;
+    log.appendChild(e);
+  }
+  // clients (best-effort from health)
+  fetch("/api/health").then(r=>r.json()).then(h=>{$("clients").textContent=h.clients;}).catch(()=>{});
+}
+connect();
+</script>
+</body>
+</html>
