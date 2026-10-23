@@ -33,7 +33,7 @@ def _intercept_insights(page: Page, payload: dict) -> None:
     """Force deterministic /api/insights response."""
     # Intercept /api/events to simulate authenticated user
     page.context.route(
-        "**/api/events*",
+        lambda request: "/api/events" in request.url,
         lambda route: route.fulfill(
             status=200,
             content_type="application/json",
@@ -42,7 +42,7 @@ def _intercept_insights(page: Page, payload: dict) -> None:
     )
     # Intercept /api/insights
     page.context.route(
-        "**/api/insights",
+        lambda request: "/api/insights" in request.url,
         lambda route: route.fulfill(
             status=200,
             content_type="application/json",
