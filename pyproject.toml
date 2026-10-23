@@ -10,6 +10,7 @@ ignore = ["B008", "SIM117", "SIM105"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-q --strict-markers --strict-config"
 markers = [
     "integration: requires POSTGRES_TEST_URL (auto-skips otherwise)",
