@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
-      image: mcr.microsoft.com/playwright/python:v1.47.0-jammy
+      image: mcr.microsoft.com/playwright/python:v1.47.0-noble
       options: --user root
     services:
       redis:
