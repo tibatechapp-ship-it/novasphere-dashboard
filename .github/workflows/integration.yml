@@ -25,7 +25,7 @@ jobs:
         image: redis:7-alpine
         ports: ["6379:6379"]
     env:
-      POSTGRES_TEST_URL: postgresql://raqib:test@localhost:5432/raqib_test
+      POSTGRES_TEST_URL: postgresql+psycopg://raqib:test@localhost:5432/raqib_test
       JWT_SECRET_KEY: test-secret-32-chars-minimum-abcdefghij
       ENV: development
       MOCK_DATA: "false"

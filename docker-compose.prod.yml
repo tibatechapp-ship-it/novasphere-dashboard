@@ -7,7 +7,7 @@ services:
     environment:
       ENV: production
       MOCK_DATA: "false"
-      DATABASE_URL: postgresql://raqib:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/raqib_db
+      DATABASE_URL: postgresql+psycopg://raqib:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/raqib_db
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
     depends_on:
       postgres: { condition: service_healthy }

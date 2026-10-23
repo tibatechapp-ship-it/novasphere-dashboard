@@ -7,7 +7,7 @@ services:
     environment:
       ENV: development
       MOCK_DATA: "true"
-      DATABASE_URL: postgresql://raqib:raqib_secret@postgres:5432/raqib_db
+      DATABASE_URL: postgresql+psycopg://raqib:raqib_secret@postgres:5432/raqib_db
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-insecure-secret-change-me-32chars-min}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
