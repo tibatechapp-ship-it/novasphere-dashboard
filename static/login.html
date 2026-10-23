@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NovaSphere — Login</title>
+<style>
+:root{--bg:#05060f;--panel:#0b0f1f;--neon:#00f0ff;--neon2:#ff2bd6;--neon3:#7cff6b;--err:#ff4d6d;--text:#e6f1ff;--muted:#6b7a99;--border:#1f2a4a}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
+body::before{content:"";position:fixed;inset:0;background:radial-gradient(circle at 20% 10%,rgba(0,240,255,.08),transparent 40%),radial-gradient(circle at 80% 90%,rgba(255,43,214,.08),transparent 40%);pointer-events:none}
+.card{width:360px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:32px;box-shadow:0 0 30px rgba(0,240,255,.2)}
+.logo{font-size:26px;font-weight:800;letter-spacing:2px;text-align:center;background:linear-gradient(90deg,var(--neon),var(--neon2));-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:6px}
+.sub{text-align:center;color:var(--muted);font-size:12px;margin-bottom:24px}
+label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px}
+input{width:100%;padding:10px 12px;background:#050a18;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;margin-bottom:16px;outline:none}
+input:focus{border-color:var(--neon);box-shadow:0 0 8px rgba(0,240,255,.3)}
+.btn{width:100%;padding:12px;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px;letter-spacing:1px;text-transform:uppercase;margin-top:4px}
+.btn.primary{background:linear-gradient(90deg,var(--neon),var(--neon2));color:#000}
+.btn.ghost{background:transparent;color:var(--neon);border:1px solid var(--neon);margin-top:8px}
+.err{color:var(--err);font-size:12px;margin-top:8px;text-align:center;min-height:16px}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tab{flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;font-weight:700}
+.tab.active{border-color:var(--neon);color:var(--neon);box-shadow:0 0 8px rgba(0,240,255,.3)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">NovaSphere</div>
+  <div class="sub">Secure Access Portal</div>
+  <div class="tabs">
+    <button class="tab active" data-mode="login">Login</button>
+    <button class="tab" data-mode="signup">Sign up</button>
+  </div>
+  <form id="form">
+    <label>Username</label>
+    <input name="username" autocomplete="username" required>
+    <label>Password</label>
+    <input name="password" type="password" autocomplete="current-password" required>
+    <button class="btn primary" type="submit" id="submit">Enter</button>
+  </form>
+  <div class="err" id="err"></div>
+</div>
+<script>
+"use strict";
+let mode = "login";
+document.querySelectorAll(".tab").forEach(t=>{
+  t.addEventListener("click",()=>{mode=t.dataset.mode;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));$("submit").textContent=mode==="login"?"Enter":"Create";});
+});
+const $=id=>document.getElementById(id);
+$("form").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const url = mode==="login"?"/api/auth/login":"/api/auth/signup";
+  const r = await fetch(url,{method:"POST",body:fd});
+  const j = await r.json().catch(()=>({}));
+  if (j.ok){ window.location.href="/"; }
+  else { $("err").textContent = j.error || "failed"; }
+});
+</script>
+</body>
+</html>

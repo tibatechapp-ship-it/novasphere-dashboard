@@ -8,9 +8,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi import Cookie, FastAPI, Form, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+
+from auth import authenticate, create_user, get_user
 
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
@@ -98,12 +100,57 @@ def _random_metrics() -> dict[str, Any]:
     }
 
 
-@app.get("/", response_class=HTMLResponse)
-async def index() -> HTMLResponse:
+@app.get("/login", response_class=HTMLResponse)
+async def login_page() -> HTMLResponse:
+    html_path = STATIC_DIR / "login.html"
+    if html_path.exists():
+        return HTMLResponse(html_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>Login</h1>")
+
+
+@app.get("/", response_class=HTMLResponse, response_model=None)
+async def index(ns_token: str | None = Cookie(default=None)) -> HTMLResponse | RedirectResponse:
+    if not get_user(ns_token):
+        return RedirectResponse(url="/login", status_code=303)
     html_path = STATIC_DIR / "index.html"
     if html_path.exists():
         return HTMLResponse(html_path.read_text(encoding="utf-8"))
     return HTMLResponse("<h1>NovaSphere</h1><p>static/index.html missing</p>")
+
+
+@app.post("/api/auth/signup", response_model=None)
+async def signup(username: str = Form(...), password: str = Form(...)):
+    ok, msg = create_user(username, password)
+    if not ok:
+        return {"ok": False, "error": msg}
+    resp = RedirectResponse(url="/", status_code=303)
+    resp.set_cookie("ns_token", msg, httponly=True, samesite="lax", max_age=86400)
+    return {"ok": True, "token": msg}
+
+
+@app.post("/api/auth/login", response_model=None)
+async def login(username: str = Form(...), password: str = Form(...)):
+    token = authenticate(username, password)
+    if not token:
+        return {"ok": False, "error": "invalid credentials"}
+    resp = RedirectResponse(url="/", status_code=303)
+    resp.set_cookie("ns_token", token, httponly=True, samesite="lax", max_age=86400)
+    return {"ok": True, "token": token}
+
+
+@app.post("/api/auth/logout", response_model=None)
+async def logout():
+    resp = RedirectResponse(url="/login", status_code=303)
+    resp.delete_cookie("ns_token")
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+async def me(ns_token: str | None = Cookie(default=None)):
+    user = get_user(ns_token)
+    if not user:
+        return {"ok": False, "error": "not authenticated"}
+    return {"ok": True, "username": user}
 
 
 @app.get("/api/health")
