@@ -21,7 +21,10 @@ def test_all_expected_tables_exist(pg_engine):
 
 def test_users_schema(pg_engine):
     cols = {c["name"]: c for c in inspect(pg_engine).get_columns("users")}
-    assert cols["id"]["primary_key"] is True
+    pk_info = inspect(pg_engine).get_pk_constraint("users")
+    pk_cols = pk_info["constrained_columns"]
+    assert "id" in pk_cols
+    assert "id" in pk_cols
     assert cols["username"]["nullable"] is False
     assert cols["password_hash"]["nullable"] is False
     assert cols["created_at"]["nullable"] is False
