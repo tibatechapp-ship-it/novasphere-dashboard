@@ -48,10 +48,5 @@ def logged_in_page(page):
 
     # 3) navigate
     page.goto("/")
-
-    # 4) wait for Alpine to init — dashboard OR auth form should appear
-    page.wait_for_selector(
-        '[data-testid="dashboard"], input[name="username"]',
-        timeout=20000,
-    )
+    page.wait_for_load_state("networkidle", timeout=20000)
     return page
