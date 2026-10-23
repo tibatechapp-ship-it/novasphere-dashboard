@@ -1,9 +1,9 @@
 """Playwright fixtures — login via HTTP, not via broken UI."""
 
 import os
+
+import httpx
 import pytest
-import requests
-from playwright.sync_api import sync_playwright
 
 BASE_URL = os.getenv("E2E_BASE_URL", "http://localhost:8080")
 
@@ -18,30 +18,33 @@ def logged_in_page(page):
     """Login via API (bypasses UI), inject cookie, then navigate."""
 
     # 1) signup or login via HTTP
-    r = requests.post(
-        f"{BASE_URL}/api/auth/signup",
-        data={"username": "e2euser", "password": "secret123"},
-        timeout=10,
-    )
-    if r.status_code == 400:
-        r = requests.post(
-            f"{BASE_URL}/api/auth/login",
+    with httpx.Client(timeout=10.0) as client:
+        r = client.post(
+            f"{BASE_URL}/api/auth/signup",
             data={"username": "e2euser", "password": "secret123"},
-            timeout=10,
         )
+        if r.status_code == 400:
+            r = client.post(
+                f"{BASE_URL}/api/auth/login",
+                data={"username": "e2euser", "password": "secret123"},
+            )
     r.raise_for_status()
     token = r.json()["token"]
 
     # 2) inject cookie BEFORE navigation
-    page.context.add_cookies([{
-        "name": "ns_token",
-        "value": token,
-        "domain": "localhost",
-        "path": "/",
-        "httpOnly": True,
-        "secure": False,
-        "sameSite": "Lax",
-    }])
+    page.context.add_cookies(
+        [
+            {
+                "name": "ns_token",
+                "value": token,
+                "domain": "localhost",
+                "path": "/",
+                "httpOnly": True,
+                "secure": False,
+                "sameSite": "Lax",
+            }
+        ]
+    )
 
     # 3) navigate
     page.goto("/")
