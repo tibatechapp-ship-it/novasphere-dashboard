@@ -19,7 +19,7 @@ def test_health():
 
 def test_signup_login_me():
     c = TestClient(main.app)
-    r = c.post("/api/auth/signup", data={"username": "u1", "password": "pass1234"})
+    r = c.post("/api/auth/signup", data={"username": "user1", "password": "pass1234"})
     assert r.status_code == 200
     assert r.json()["ok"] is True
     # cookie set
@@ -36,6 +36,7 @@ def test_dashboard_protected():
 
 def test_ai_analyze():
     c = TestClient(main.app)
+    c.post("/api/auth/signup", data={"username": "aiuser", "password": "pass1234"})
     r = c.post("/api/ai/analyze", json={"events": [{"level": "error", "msg": "boom"}], "metrics": {"cpu": 90}})
     assert r.status_code == 200
     assert r.json()["ok"] is True

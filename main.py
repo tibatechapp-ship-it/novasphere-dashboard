@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import Cookie, FastAPI, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
@@ -113,6 +114,17 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
+# Security: CORS (restrictive by default)
+import os as _os
+_allowed = _os.getenv("CORS_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in _allowed if o.strip()],
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
 @app.get("/login", response_class=HTMLResponse)
 async def login_page() -> HTMLResponse:
     html_path = STATIC_DIR / "login.html"
@@ -133,6 +145,11 @@ async def index(ns_token: str | None = Cookie(default=None)) -> HTMLResponse | R
 
 @app.post("/api/auth/signup", response_model=None)
 async def signup(username: str = Form(...), password: str = Form(...)):
+    username = (username or "").strip()
+    if len(username) < 3 or len(username) > 32:
+        return {"ok": False, "error": "username must be 3-32 chars"}
+    if len(password or "") < 6:
+        return {"ok": False, "error": "password must be at least 6 chars"}
     ok, msg = create_user(username, password)
     if not ok:
         return {"ok": False, "error": msg}
@@ -172,7 +189,10 @@ async def health() -> dict[str, Any]:
 
 
 @app.get("/api/events")
-async def recent_events(limit: int = 10):
+async def recent_events(limit: int = 10, ns_token: str | None = Cookie(default=None)):
+    if not get_user(ns_token):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="not authenticated")
     db: Session = SessionLocal()
     try:
         rows = db.query(Event).order_by(Event.ts.desc()).limit(limit).all()
@@ -184,7 +204,10 @@ async def recent_events(limit: int = 10):
 
 
 @app.post("/api/ai/analyze", response_model=None)
-async def ai_analyze(payload: dict[str, Any]):
+async def ai_analyze(payload: dict[str, Any], ns_token: str | None = Cookie(default=None)):
+    if not get_user(ns_token):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="not authenticated")
     events = payload.get("events", []) or []
     metrics = payload.get("metrics", {}) or {}
     last = events[-10:]
@@ -222,6 +245,11 @@ async def ai_analyze(payload: dict[str, Any]):
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket) -> None:
+    # Auth via cookie or query token
+    token = ws.cookies.get("ns_token") or ws.query_params.get("token")
+    if not get_user(token):
+        await ws.close(code=4401)
+        return
     await manager.connect(ws)
     try:
         while True:
