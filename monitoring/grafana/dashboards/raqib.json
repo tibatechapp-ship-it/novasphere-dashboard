@@ -1,0 +1,13 @@
+{
+  "dashboard": {
+    "title": "Raqib Dashboard",
+    "panels": [
+      {"title": "CPU %", "type": "graph", "targets": [{"expr": "raqib_cpu_percent"}]},
+      {"title": "Memory %", "type": "graph", "targets": [{"expr": "raqib_memory_percent"}]},
+      {"title": "RPS", "type": "graph", "targets": [{"expr": "rate(raqib_requests_total[1m])"}]},
+      {"title": "Latency", "type": "graph", "targets": [{"expr": "raqib_latency_ms"}]},
+      {"title": "WS Connections", "type": "stat", "targets": [{"expr": "raqib_ws_connections_active"}]},
+      {"title": "Audit Events", "type": "stat", "targets": [{"expr": "raqib_audit_events_total"}]}
+    ]
+  }
+}
