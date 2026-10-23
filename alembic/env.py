@@ -18,8 +18,13 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Override DB URL from application settings
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# Override DB URL from application settings, unless POSTGRES_TEST_URL is set
+# (integration tests pass pg_url via cfg.set_main_option before command.upgrade)
+_pg_test_url = os.getenv("POSTGRES_TEST_URL")
+if _pg_test_url:
+    config.set_main_option("sqlalchemy.url", _pg_test_url)
+else:
+    config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 target_metadata = Base.metadata
 
