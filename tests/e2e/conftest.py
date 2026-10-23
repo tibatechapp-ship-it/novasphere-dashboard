@@ -17,13 +17,23 @@ def browser_context_args(browser_context_args):
 def logged_in_page(page):
     """Login via API (bypasses UI), inject cookie, then navigate."""
 
-    # 1) signup or login via HTTP
+    # 1) try login first (user is seeded by CI workflow), fall back to signup
     with httpx.Client(timeout=10.0) as client:
         r = client.post(
-            f"{BASE_URL}/api/auth/signup",
+            f"{BASE_URL}/api/auth/login",
             data={"username": "e2euser", "password": "secret123"},
         )
-        if r.status_code == 400:
+        if r.status_code in (401, 404):
+            r = client.post(
+                f"{BASE_URL}/api/auth/signup",
+                data={"username": "e2euser", "password": "secret123"},
+            )
+    # Handle 429 by retrying after a short delay
+    if r.status_code == 429:
+        import time
+
+        time.sleep(2)
+        with httpx.Client(timeout=10.0) as client:
             r = client.post(
                 f"{BASE_URL}/api/auth/login",
                 data={"username": "e2euser", "password": "secret123"},
@@ -37,8 +47,7 @@ def logged_in_page(page):
             {
                 "name": "ns_token",
                 "value": token,
-                "domain": "localhost",
-                "path": "/",
+                "url": BASE_URL,
                 "httpOnly": True,
                 "secure": False,
                 "sameSite": "Lax",
