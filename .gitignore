@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+raqib.db*
+
+# Docker
+docker-compose.override.yml.local
+.docker/
+
+# Playwright
+.pytest-e2e/
+test-results/
+playwright-report/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Backups
+*.dump
+*.bak
+
+# Secrets
+*.pem
+*.key

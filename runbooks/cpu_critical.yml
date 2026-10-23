@@ -1,0 +1,14 @@
+id: cpu_critical
+title: "دليل معالجة: ارتفاع حاد في وحدة المعالجة (CPU)"
+severity: critical
+condition:
+  cpu_gt: 90
+steps:
+  - step: "حدّد العملية الأعلى استهلاكاً باستخدام أداة المراقبة المتاحة لديك (top/htop/kubectl top pods)"
+    command: "top -o %CPU"
+    platform_hint: linux
+  - step: "في Kubernetes، حدّد الـ Pod المسؤول ثم أعد تشغيله عبر kubectl rollout restart"
+    platform_hint: kubernetes
+  - step: "أعد تشغيل الخدمة المتأثرة عبر طبقة التنسيق لديك (systemd / Kubernetes / ECS)"
+    platform_hint: generic
+action_url_template: "/runbook/cpu_critical"

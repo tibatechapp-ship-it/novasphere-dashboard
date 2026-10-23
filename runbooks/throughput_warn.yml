@@ -1,0 +1,13 @@
+id: throughput_warn
+title: "دليل معالجة: إنتاجية عالية (تحقق من Rate Limiting)"
+severity: warn
+condition:
+  rps_gt: 350
+steps:
+  - step: "راجع سجلات Rate Limiter وحدد IP/User المتسبب"
+    platform_hint: generic
+  - step: "راجع إعدادات Rate Limiting الحالية"
+    platform_hint: generic
+  - step: "فكّر في توسيع الـ replicas أفقيّاً إذا كان الحمل شرعياً"
+    platform_hint: kubernetes
+action_url_template: "/runbook/throughput_warn"

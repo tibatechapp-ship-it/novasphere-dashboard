@@ -1,0 +1,14 @@
+id: latency_warn
+title: "دليل معالجة: زمن استجابة مرتفع"
+severity: warn
+condition:
+  latency_ms_gt: 100
+steps:
+  - step: "افحص حالة الاتصال بالشبكة بين الخدمات المتأثرة"
+    command: "ping -c 10 gateway"
+    platform_hint: linux
+  - step: "راجع سجلات الشبكة والـ ingress controller"
+    platform_hint: generic
+  - step: "تحقق من أداء قاعدة البيانات (slow queries، connection pool)"
+    platform_hint: generic
+action_url_template: "/runbook/latency_warn"

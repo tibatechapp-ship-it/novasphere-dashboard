@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>رقيب — تحليلات فورية</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+  <script defer src="/static/js/runbook-ui.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    body {
+      background: radial-gradient(ellipse at top, #0f172a 0%, #020617 100%);
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+    }
+    .glass {
+      backdrop-filter: blur(12px);
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+    .metric-value { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body class="text-slate-200" x-data="{ ...runbookUI(), ...raqibApp() }" x-cloak>
+
+  <!-- AUTH VIEW -->
+  <div x-show="!authenticated" x-transition class="min-h-screen flex items-center justify-center p-4">
+    <div class="glass rounded-2xl p-8 w-full max-w-md shadow-2xl border border-cyan-500/20">
+      <h1 class="text-3xl font-bold text-cyan-400 mb-1 text-center">رقيب</h1>
+      <p class="text-slate-400 text-sm text-center mb-6">تحليلات فورية بالذكاء الاصطناعي</p>
+      <div class="flex gap-2 mb-6">
+        <button type="button" @click="authMode='login'" :class="authMode==='login' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40' : 'bg-slate-800/50 text-slate-400 border-slate-700'" class="flex-1 py-2 rounded-lg border text-sm font-medium transition">دخول</button>
+        <button type="button" @click="authMode='signup'" :class="authMode==='signup' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40' : 'bg-slate-800/50 text-slate-400 border-slate-700'" class="flex-1 py-2 rounded-lg border text-sm font-medium transition">إنشاء حساب</button>
+      </div>
+      <form @submit.prevent="authMode === 'login' ? login() : signup()" class="space-y-4">
+        <div>
+          <label for="username" class="block text-xs text-slate-400 mb-1">اسم المستخدم</label>
+          <input id="username" name="username" type="text" x-model="form.username" required minlength="3" maxlength="32" autocomplete="username" class="w-full bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:border-cyan-500 focus:outline-none" />
+        </div>
+        <div>
+          <label for="password" class="block text-xs text-slate-400 mb-1">كلمة المرور</label>
+          <input id="password" name="password" type="password" x-model="form.password" required minlength="6" autocomplete="current-password" class="w-full bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:border-cyan-500 focus:outline-none" />
+        </div>
+        <p x-show="authError" x-text="authError" class="text-red-400 text-xs" role="alert"></p>
+        <button type="submit" :disabled="authBusy" class="w-full py-2.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/40 font-medium transition disabled:opacity-50">
+          <span x-show="!authBusy" x-text="authMode === 'login' ? 'دخول' : 'إنشاء الحساب'"></span>
+          <span x-show="authBusy">جارٍ...</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div x-show="authenticated" x-transition data-testid="dashboard" class="min-h-screen p-4 md:p-6 max-w-7xl mx-auto">
+    <header class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-cyan-400">رقيب</h1>
+        <p class="text-xs text-slate-500">مرحباً، <span x-text="username" class="text-slate-300"></span></p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span x-text="wsConnected ? 'متصل' : 'منقطع'"></span>
+        </span>
+        <button type="button" @click="logout()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">خروج</button>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <template x-for="m in metricCards()" :key="m.key">
+        <div class="glass rounded-xl p-4 border-l-4" :class="m.color">
+          <p class="text-xs text-slate-400 mb-1" x-text="m.label"></p>
+          <p class="text-2xl font-bold metric-value" :class="m.textColor">
+            <span x-text="m.value"></span><span class="text-sm text-slate-500 mr-1" x-text="m.unit"></span>
+          </p>
+        </div>
+      </template>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      <div class="glass rounded-xl p-4">
+        <h3 class="text-sm font-semibold text-slate-300 mb-3">CPU / MEM %</h3>
+        <div class="h-48"><canvas id="chartResources"></canvas></div>
+      </div>
+      <div class="glass rounded-xl p-4">
+        <h3 class="text-sm font-semibold text-slate-300 mb-3">RPS / Latency</h3>
+        <div class="h-48"><canvas id="chartThroughput"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Smart Runbook Card -->
+    <section
+      x-show="insightsLoaded"
+      x-transition
+      data-testid="runbook-card"
+      class="glass rounded-xl p-6 border-l-4 shadow-lg mb-6"
+      :class="insights.runbook ? severityClass(insights.runbook.severity) : 'border-slate-500 bg-slate-500/5'"
+      role="region"
+      :aria-label="insights.runbook ? ('دليل معالجة: ' + insights.runbook.title) : 'تحليل النظام'"
+    >
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span
+            data-testid="severity-badge"
+            class="text-xs font-bold uppercase tracking-wider px-2 py-1 rounded"
+            :class="insights.runbook ? severityBadgeClass(insights.runbook.severity) : 'bg-slate-500/20 text-slate-300'"
+            x-text="insights.runbook ? severityLabel(insights.runbook.severity) : 'INFO'"
+          ></span>
+          <h3 class="text-lg font-semibold text-white" x-text="insights.runbook?.title ?? 'تحليل ذكي'"></h3>
+        </div>
+        <span class="text-xs text-slate-500" x-text="insights.runbook?.steps?.length ? insights.runbook.steps.length + ' خطوات' : ''"></span>
+      </div>
+
+      <p class="text-slate-300 text-sm mb-4" x-text="insights.summary"></p>
+
+      <template x-if="insights.runbook?.steps?.length">
+        <ol class="space-y-3 mb-4" role="list" data-testid="steps-list">
+          <template x-for="(step, i) in insights.runbook.steps" :key="i">
+            <li class="flex gap-3 items-start" data-testid="runbook-step">
+              <span class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center text-xs font-bold" aria-hidden="true" x-text="i + 1"></span>
+              <div class="flex-1">
+                <p class="text-slate-200 text-sm" x-text="step.step"></p>
+                <template x-if="step.command">
+                  <div class="mt-2 flex items-center gap-2">
+                    <code class="flex-1 text-xs bg-slate-800 text-cyan-300 px-2 py-1 rounded font-mono overflow-x-auto" data-testid="command-text" x-text="step.command"></code>
+                    <button
+                      type="button"
+                      class="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition min-w-[2rem]"
+                      :aria-label="'نسخ الأمر ' + (i+1)"
+                      :aria-describedby="'copy-hint-' + i"
+                      @click="copyToClipboard(step.command)"
+                      data-testid="copy-button"
+                    >
+                      <span x-show="copiedIndex !== step.command" aria-hidden="true">📋</span>
+                      <span x-show="copiedIndex === step.command" aria-hidden="true">✓</span>
+                    </button>
+                    <span :id="'copy-hint-' + i" class="sr-only">ينسخ الأمر إلى الحافظة</span>
+                  </div>
+                </template>
+              </div>
+            </li>
+          </template>
+        </ol>
+      </template>
+
+      <template x-if="insights.runbook?.action_url">
+        <a
+          :href="insights.runbook.action_url"
+          @click="trackActionClick(insights.runbook.id ?? insights.runbook.title)"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="action-button"
+          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20 transition text-sm font-medium"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+          </svg>
+          فتح في منصة الأتمتة
+        </a>
+      </template>
+
+      <template x-if="!insights.runbook">
+        <p class="text-xs text-slate-500 italic" data-testid="empty-state">
+          النظام يعمل بشكل طبيعي — آخر فحص: <span x-text="lastChecked"></span>
+        </p>
+      </template>
+
+      <p class="sr-only" role="status" aria-live="polite" x-text="copyAnnouncement"></p>
+    </section>
+
+    <!-- Agents -->
+    <div class="glass rounded-xl p-4 mb-6">
+      <h3 class="text-sm font-semibold text-slate-300 mb-3">الوكلاء</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <template x-for="a in agents" :key="a.id">
+          <div class="bg-slate-900/50 rounded-lg p-3 border border-slate-800">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-cyan-400" x-text="a.id"></span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded" :class="agentStatusClass(a.status)" x-text="a.status"></span>
+            </div>
+            <p class="text-sm text-slate-300 truncate" x-text="a.name"></p>
+            <div class="mt-2 flex justify-between text-[11px] text-slate-500">
+              <span>حمل: <span x-text="a.load + '%'"></span></span>
+              <span>مهام: <span x-text="a.tasks"></span></span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Events -->
+    <div class="glass rounded-xl p-4 mb-6">
+      <h3 class="text-sm font-semibold text-slate-300 mb-3">سجل الأحداث</h3>
+      <ul class="space-y-2 max-h-64 overflow-y-auto">
+        <template x-for="(ev, i) in events" :key="i">
+          <li class="flex items-start gap-2 text-xs">
+            <span class="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold" :class="eventLevelClass(ev.level)" x-text="ev.level"></span>
+            <span class="text-slate-400 flex-shrink-0" x-text="formatTime(ev.ts)"></span>
+            <span class="text-slate-300" x-text="ev.msg"></span>
+          </li>
+        </template>
+        <li x-show="events.length === 0" class="text-slate-500 text-xs italic">لا أحداث بعد...</li>
+      </ul>
+    </div>
+
+    <!-- Audit log viewer -->
+    <div class="glass rounded-xl p-4">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 class="text-sm font-semibold text-slate-300">سجل الحوكمة</h3>
+        <div class="flex items-center gap-2">
+          <select x-model="auditFilter.action" @change="loadAudit()" class="text-xs bg-slate-800 border border-slate-700 rounded px-2 py-1">
+            <option value="">الكل</option>
+            <option value="runbook_view">عرض Runbook</option>
+            <option value="action_url_click">نقر زر الأتمتة</option>
+          </select>
+          <button type="button" @click="loadAudit()" class="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 transition">تحديث</button>
+        </div>
+      </div>
+      <template x-if="auditRows.length === 0">
+        <p class="text-xs text-slate-500 italic">لا سجلات بعد.</p>
+      </template>
+      <template x-if="auditRows.length > 0">
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead class="text-slate-400 border-b border-slate-800">
+              <tr>
+                <th class="text-right py-2 px-2">الوقت</th>
+                <th class="text-right py-2 px-2">الإجراء</th>
+                <th class="text-right py-2 px-2">الهدف</th>
+                <th class="text-right py-2 px-2">تفاصيل</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="row in auditRows" :key="row.id">
+                <tr class="border-b border-slate-800/50 hover:bg-slate-800/30">
+                  <td class="py-1.5 px-2 text-slate-400" x-text="new Date(row.ts).toLocaleString()"></td>
+                  <td class="py-1.5 px-2"><span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400" x-text="row.action"></span></td>
+                  <td class="py-1.5 px-2 text-slate-300" x-text="row.target"></td>
+                  <td class="py-1.5 px-2 text-slate-500 font-mono" x-text="row.metadata_json ? JSON.stringify(row.metadata_json) : '—'"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+          <p class="text-xs text-slate-500 mt-2" x-text="auditTotal + ' سجل — صفحة ' + auditPage"></p>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <script>
+    function raqibApp() {
+      return {
+        authenticated: false,
+        username: "",
+        authMode: "login",
+        authBusy: false,
+        authError: "",
+        form: { username: "", password: "" },
+        metrics: { cpu: 0, mem: 0, req_per_sec: 0, latency_ms: 0 },
+        agents: [],
+        events: [],
+        wsConnected: false,
+        ws: null,
+        wsReconnectTimer: null,
+        insights: {},
+        insightsLoaded: false,
+        lastChecked: "—",
+        insightsTimer: null,
+        lastRunbookKey: null,
+        copiedIndex: null,
+        copyAnnouncement: "",
+        chartResources: null,
+        chartThroughput: null,
+        maxPoints: 30,
+        auditRows: [],
+        auditTotal: 0,
+        auditPage: 1,
+        auditFilter: { action: "" },
+
+        async init() {
+          try {
+            const r = await fetch("/api/events?limit=1", { credentials: "include" });
+            if (r.ok) {
+              this.authenticated = true;
+              this.initCharts();
+              this.connectWS();
+              this.startInsightsLoop();
+              this.loadAudit();
+            }
+          } catch (_) {}
+        },
+
+        initCharts() {
+          this.$nextTick(() => {
+            const ctx1 = document.getElementById("chartResources");
+            const ctx2 = document.getElementById("chartThroughput");
+            if (!ctx1 || !ctx2) return;
+            const chartOpts = {
+              responsive: true, maintainAspectRatio: false, animation: false,
+              plugins: { legend: { labels: { color: "#94a3b8", font: { size: 10 } } } },
+              scales: { x: { display: false }, y: { ticks: { color: "#64748b", font: { size: 9 } }, grid: { color: "rgba(148,163,184,0.08)" } } }
+            };
+            this.chartResources = new Chart(ctx1, {
+              type: "line",
+              data: { labels: [], datasets: [
+                { label: "CPU %", data: [], borderColor: "#06b6d4", backgroundColor: "rgba(6,182,212,0.1)", tension: 0.3, fill: true, pointRadius: 0 },
+                { label: "MEM %", data: [], borderColor: "#a855f7", backgroundColor: "rgba(168,85,247,0.1)", tension: 0.3, fill: true, pointRadius: 0 }
+              ]},
+              options: { ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, min: 0, max: 100 } } }
+            });
+            this.chartThroughput = new Chart(ctx2, {
+              type: "line",
+              data: { labels: [], datasets: [
+                { label: "RPS", data: [], borderColor: "#22d3ee", backgroundColor: "rgba(34,211,238,0.1)", tension: 0.3, fill: true, pointRadius: 0, yAxisID: "y" },
+                { label: "Latency ms", data: [], borderColor: "#f59e0b", backgroundColor: "rgba(245,158,11,0.1)", tension: 0.3, fill: true, pointRadius: 0, yAxisID: "y1" }
+              ]},
+              options: { ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, position: "left" }, y1: { ...chartOpts.scales.y, position: "right", grid: { display: false } } } }
+            });
+          });
+        },
+
+        async login() { await this._auth("/api/auth/login"); },
+        async signup() { await this._auth("/api/auth/signup"); },
+
+        async _auth(endpoint) {
+          this.authBusy = true;
+          this.authError = "";
+          try {
+            const body = new URLSearchParams(this.form);
+            const r = await fetch(endpoint, { method: "POST", credentials: "include", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+            if (!r.ok) { const data = await r.json().catch(() => ({})); this.authError = data.detail || "فشل التحقق"; return; }
+            const data = await r.json();
+            this.username = this.form.username;
+            this.authenticated = true;
+            this.form = { username: "", password: "" };
+            this.initCharts();
+            this.connectWS();
+            this.startInsightsLoop();
+            this.loadAudit();
+          } catch (e) { this.authError = "خطأ في الاتصال"; }
+          finally { this.authBusy = false; }
+        },
+
+        async logout() {
+          try { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); } catch (_) {}
+          if (this.ws) this.ws.close();
+          if (this.insightsTimer) clearInterval(this.insightsTimer);
+          this.authenticated = false;
+          this.wsConnected = false;
+        },
+
+        connectWS() {
+          if (this.ws && this.ws.readyState <= 1) return;
+          const proto = location.protocol === "https:" ? "wss" : "ws";
+          try { this.ws = new WebSocket(proto + "://" + location.host + "/ws"); } catch (_) { return; }
+          this.ws.onopen = () => { this.wsConnected = true; };
+          this.ws.onclose = () => { this.wsConnected = false; if (this.authenticated) this.wsReconnectTimer = setTimeout(() => this.connectWS(), 2000); };
+          this.ws.onerror = () => { this.wsConnected = false; };
+          this.ws.onmessage = (e) => { try { this.handleWSMessage(JSON.parse(e.data)); } catch (_) {} };
+        },
+
+        handleWSMessage(payload) {
+          this.metrics = { cpu: payload.cpu ?? 0, mem: payload.mem ?? 0, req_per_sec: payload.req_per_sec ?? 0, latency_ms: payload.latency_ms ?? 0 };
+          if (Array.isArray(payload.agents)) this.agents = payload.agents;
+          if (Array.isArray(payload.events)) this.events = [...payload.events.slice().reverse(), ...this.events].slice(0, 50);
+          this.pushChartPoints();
+        },
+
+        pushChartPoints() {
+          if (!this.chartResources || !this.chartThroughput) return;
+          const push = (chart, values) => {
+            chart.data.labels.push("");
+            values.forEach((v, i) => chart.data.datasets[i].data.push(v));
+            if (chart.data.labels.length > this.maxPoints) { chart.data.labels.shift(); chart.data.datasets.forEach(ds => ds.data.shift()); }
+            chart.update("none");
+          };
+          push(this.chartResources, [this.metrics.cpu, this.metrics.mem]);
+          push(this.chartThroughput, [this.metrics.req_per_sec, this.metrics.latency_ms]);
+        },
+
+        startInsightsLoop() {
+          if (this.insightsTimer) clearInterval(this.insightsTimer);
+          this.fetchInsights();
+          this.insightsTimer = setInterval(() => this.fetchInsights(), 5000);
+        },
+
+        async fetchInsights() {
+          try {
+            const r = await fetch("/api/insights", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ events: this.events.slice(0, 10), metrics: this.metrics }) });
+            if (!r.ok) return;
+            const data = await r.json();
+            this.insights = data;
+            this.insightsLoaded = true;
+            this.lastChecked = new Date().toLocaleTimeString();
+            if (data.runbook) {
+              const key = (data.runbook.id || data.runbook.title) + ":" + data.runbook.severity;
+              if (key !== this.lastRunbookKey) {
+                this.lastRunbookKey = key;
+                this.trackRunbookView(data.runbook);
+              }
+            }
+          } catch (_) {}
+        },
+
+        trackRunbookView(runbook) {
+          if (!runbook) return;
+          fetch("/api/audit/runbook-view", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ runbook_id: runbook.id || runbook.title, severity: runbook.severity }) }).catch(() => {});
+        },
+
+        trackActionClick(runbookId) {
+          if (!runbookId) return;
+          fetch("/api/audit/action-url-click", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ runbook_id: runbookId }) }).catch(() => {});
+        },
+
+        async copyToClipboard(text) {
+          if (!text) return;
+          const showSuccess = () => {
+            this.copiedIndex = text;
+            this.copyAnnouncement = "تم النسخ إلى الحافظة";
+            setTimeout(() => { this.copiedIndex = null; this.copyAnnouncement = ""; }, 1500);
+          };
+          if (navigator.clipboard && window.isSecureContext) {
+            try { await navigator.clipboard.writeText(text); showSuccess(); return; } catch (_) {}
+          }
+          try {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+            showSuccess();
+          } catch (_) {}
+        },
+
+        async loadAudit() {
+          try {
+            const params = new URLSearchParams({ page: this.auditPage, page_size: 50 });
+            if (this.auditFilter.action) params.set("action", this.auditFilter.action);
+            const r = await fetch("/api/audit/log?" + params, { credentials: "include" });
+            if (!r.ok) return;
+            const data = await r.json();
+            this.auditRows = data.rows;
+            this.auditTotal = data.total;
+          } catch (_) {}
+        },
+
+        metricCards() {
+          return [
+            { key: "cpu", label: "CPU", value: this.metrics.cpu.toFixed(1), unit: "%", color: this.metrics.cpu > 90 ? "border-red-500" : this.metrics.cpu > 70 ? "border-amber-500" : "border-cyan-500", textColor: this.metrics.cpu > 90 ? "text-red-400" : "text-slate-100" },
+            { key: "mem", label: "الذاكرة", value: this.metrics.mem.toFixed(1), unit: "%", color: this.metrics.mem > 90 ? "border-red-500" : "border-purple-500", textColor: this.metrics.mem > 90 ? "text-red-400" : "text-slate-100" },
+            { key: "rps", label: "طلبات/ث", value: this.metrics.req_per_sec.toString(), unit: "", color: "border-cyan-500", textColor: "text-slate-100" },
+            { key: "lat", label: "زمن الاستجابة", value: this.metrics.latency_ms.toString(), unit: "ms", color: this.metrics.latency_ms > 100 ? "border-amber-500" : "border-emerald-500", textColor: this.metrics.latency_ms > 100 ? "text-amber-400" : "text-slate-100" }
+          ];
+        },
+
+        severityClass(sev) {
+          return { critical: "border-red-500 bg-red-500/5", error: "border-amber-500 bg-amber-500/5", warn: "border-cyan-500 bg-cyan-500/5" }[sev] || "border-slate-500 bg-slate-500/5";
+        },
+        severityBadgeClass(sev) {
+          return { critical: "bg-red-500/20 text-red-400", error: "bg-amber-500/20 text-amber-400", warn: "bg-cyan-500/20 text-cyan-400" }[sev] || "bg-slate-500/20 text-slate-300";
+        },
+        severityLabel(sev) { return (sev || "info").toUpperCase(); },
+        agentStatusClass(status) { return { online: "bg-emerald-500/20 text-emerald-400", busy: "bg-amber-500/20 text-amber-400", idle: "bg-slate-500/20 text-slate-400" }[status] || "bg-slate-700 text-slate-400"; },
+        eventLevelClass(level) { return { error: "bg-red-500/20 text-red-400", warn: "bg-amber-500/20 text-amber-400", info: "bg-slate-600/30 text-slate-300" }[level] || "bg-slate-700 text-slate-400"; },
+        formatTime(ts) { const d = new Date(ts * 1000); return d.toLocaleTimeString(); }
+      };
+    }
+  </script>
+</body>
+</html>

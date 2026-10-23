@@ -1,0 +1,14 @@
+id: memory_critical
+title: "دليل معالجة: استهلاك ذاكرة حرج"
+severity: critical
+condition:
+  memory_gt: 90
+steps:
+  - step: "افحص حجم RSS للعملية المتأثرة وقارنه بحدود الحاوية"
+    command: "ps -o pid,rss,comm -p $(pgrep -f app | head -1)"
+    platform_hint: linux
+  - step: "راجع سجلات الخدمة المتأثرة عبر أداة إدارة السجلات لديك (journalctl / kubectl logs / CloudWatch)"
+    platform_hint: generic
+  - step: "أعد تشغيل الخدمة عبر طبقة التنسيق لديك — لا تستخدم أوامر kernel مباشرة"
+    platform_hint: generic
+action_url_template: "/runbook/memory_critical"

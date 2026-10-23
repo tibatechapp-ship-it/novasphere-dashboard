@@ -1,0 +1,13 @@
+id: error_burst
+title: "دليل معالجة: تكرار أخطاء في الأحداث"
+severity: error
+condition:
+  error_events_gte: 1
+steps:
+  - step: "راجع أحدث سجلات الأخطاء للخدمة المتأثرة عبر أداة إدارة السجلات لديك"
+    platform_hint: generic
+  - step: "تحقق من لوحة Prometheus لمعرفة أي endpoint يفشل"
+    platform_hint: generic
+  - step: "إذا كان الخطأ من تبعية خارجية، تحقق من حالة تلك التبعية"
+    platform_hint: generic
+action_url_template: "/runbook/error_burst"
