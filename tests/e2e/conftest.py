@@ -15,7 +15,7 @@ def browser_context_args(browser_context_args):
 @pytest.fixture
 def logged_in_page(page):
     page.context.clear_cookies()
-    page.goto("/", wait_until="networkidle")
+    page.goto("/", wait_until="domcontentloaded")
 
     page.wait_for_selector(
         'input[name="username"]:visible, [data-testid="dashboard"]:visible',
