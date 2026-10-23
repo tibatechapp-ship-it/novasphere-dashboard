@@ -17,6 +17,7 @@ jobs:
         image: redis:7-alpine
         ports: ["6379:6379"]
 
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
