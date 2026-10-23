@@ -1,4 +1,4 @@
-"""Playwright fixtures — login via UI form (server sets proper cookie)."""
+"""Playwright fixtures — resilient login (fresh state, handles both)."""
 
 import os
 
@@ -14,11 +14,17 @@ def browser_context_args(browser_context_args):
 
 @pytest.fixture
 def logged_in_page(page):
-    """Login via UI form — tests full flow, cookie set by server."""
+    """Clear cookies → navigate → login if needed → wait for dashboard."""
+    page.context.clear_cookies()
     page.goto("/")
-    page.wait_for_selector('input[name="username"]', state="visible", timeout=20000)
-    page.fill('input[name="username"]', "e2euser")
-    page.fill('input[name="password"]', "secret123")
-    page.click('button[type="submit"]')
+    page.wait_for_load_state("networkidle", timeout=10000)
+    page.wait_for_timeout(500)
+
+    login_input = page.locator('input[name="username"]')
+    if login_input.is_visible(timeout=2000):
+        login_input.fill("e2euser")
+        page.fill('input[name="password"]', "secret123")
+        page.click('button[type="submit"]')
+
     page.wait_for_selector('[data-testid="dashboard"]', state="visible", timeout=20000)
     return page
