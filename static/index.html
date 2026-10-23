@@ -157,7 +157,7 @@ function dashboard() {
     async runAI() {
       this.aiOut = 'Analyzing…';
       try {
-        const r = await fetch('/api/ai/analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ events: this.events, metrics: { cpu:this.cpu, mem:this.mem, req_per_sec:this.rps, latency_ms:this.lat } }) });
+        const r = await fetch('/api/insights', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ events: this.events, metrics: { cpu:this.cpu, mem:this.mem, req_per_sec:this.rps, latency_ms:this.lat } }) });
         const j = await r.json();
         this.aiOut = (j.insights||[]).map(i=>'• '+i).join('\n') + '\n\nStats: ' + JSON.stringify(j.stats);
       } catch (e) { this.aiOut = 'Error: ' + e; }

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import random
 import time
 from contextlib import asynccontextmanager
@@ -99,18 +100,21 @@ def _random_metrics() -> dict[str, Any]:
 
 
 async def background_generator() -> None:
-    """Broadcast live metrics every second."""
+    """Broadcast live metrics every second (only if MOCK_DATA enabled)."""
+    from config import MOCK_DATA
+    if not MOCK_DATA:
+        logging.info("MOCK_DATA disabled; background generator stopped.")
+        return
     while True:
         payload = _random_metrics()
-        # persist a couple of events
         try:
             db: Session = SessionLocal()
             for ev in payload["events"][:2]:
                 db.add(Event(level=ev["level"], message=ev["msg"], metric_cpu=payload["cpu"], metric_mem=payload["mem"], metric_rps=payload["req_per_sec"]))
             db.commit()
             db.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.error("background_generator persist failed: %s", exc)
         await manager.broadcast(payload)
         await asyncio.sleep(1.0)
 
@@ -224,8 +228,8 @@ async def recent_events(limit: int = 10, ns_token: str | None = Cookie(default=N
         db.close()
 
 
-@app.post("/api/ai/analyze", response_model=None)
-async def ai_analyze(request: Request, payload: dict[str, Any], ns_token: str | None = Cookie(default=None)):
+@app.post("/api/insights", response_model=None)
+async def insights(request: Request, payload: dict[str, Any], ns_token: str | None = Cookie(default=None)):
     _check_rate_limit(request)
     if not get_user(ns_token):
         from fastapi import HTTPException

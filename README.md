@@ -32,4 +32,11 @@ docker run -p 8080:8080 novasphere
 ```bash
 pytest -q
 ```
+
+## Production Readiness / Limitations
+
+- **Rate limiting** is in-memory (per-process). For multi-instance production, move to Redis (e.g. `slowapi` + Redis backend).
+- **Database** defaults to SQLite for local dev. Set `DATABASE_URL` to a PostgreSQL URL for production.
+- **JWT secret** must be changed from the default in `.env` before deploying.
+- **CORS** origins are configured via `CORS_ORIGINS` env var.
 EOF

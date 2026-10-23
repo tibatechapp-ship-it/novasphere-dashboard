@@ -37,7 +37,7 @@ def test_dashboard_protected():
 def test_ai_analyze():
     c = TestClient(main.app)
     c.post("/api/auth/signup", data={"username": "aiuser", "password": "pass1234"})
-    r = c.post("/api/ai/analyze", json={"events": [{"level": "error", "msg": "boom"}], "metrics": {"cpu": 90}})
+    r = c.post("/api/insights", json={"events": [{"level": "error", "msg": "boom"}], "metrics": {"cpu": 90}})
     assert r.status_code == 200
     assert r.json()["ok"] is True
     assert len(r.json()["insights"]) >= 1
