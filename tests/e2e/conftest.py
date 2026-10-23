@@ -1,4 +1,4 @@
-"""Playwright fixtures — login via HTTP, not via broken UI."""
+"""Playwright fixtures — login via API token cookie."""
 
 import os
 
@@ -15,47 +15,33 @@ def browser_context_args(browser_context_args):
 
 @pytest.fixture
 def logged_in_page(page):
-    """Login via API (bypasses UI), inject cookie, then navigate."""
+    """Login via API, inject cookie, navigate."""
 
-    # 1) try login first (user is seeded by CI workflow), fall back to signup
+    # Login (user is seeded by CI workflow)
     with httpx.Client(timeout=10.0) as client:
         r = client.post(
             f"{BASE_URL}/api/auth/login",
             data={"username": "e2euser", "password": "secret123"},
         )
-        if r.status_code in (401, 404):
-            r = client.post(
-                f"{BASE_URL}/api/auth/signup",
-                data={"username": "e2euser", "password": "secret123"},
-            )
-    # Handle 429 by retrying after a short delay
-    if r.status_code == 429:
-        import time
-
-        time.sleep(2)
-        with httpx.Client(timeout=10.0) as client:
-            r = client.post(
-                f"{BASE_URL}/api/auth/login",
-                data={"username": "e2euser", "password": "secret123"},
-            )
     r.raise_for_status()
     token = r.json()["token"]
 
-    # 2) inject cookie BEFORE navigation
+    # Inject cookie using URL (Playwright derives domain + path)
     page.context.add_cookies(
         [
             {
                 "name": "ns_token",
                 "value": token,
                 "url": BASE_URL,
-                "httpOnly": True,
-                "secure": False,
-                "sameSite": "Lax",
             }
         ]
     )
 
-    # 3) navigate
+    # Navigate and wait
     page.goto("/")
     page.wait_for_load_state("domcontentloaded", timeout=20000)
+
+    # Give Alpine time to initialize
+    page.wait_for_timeout(2000)
+
     return page
