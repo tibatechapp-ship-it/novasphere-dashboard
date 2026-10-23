@@ -107,20 +107,32 @@ def _clean_audit_log():
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limiter():
-    """Clear in-memory rate limiter between tests."""
-    try:
-        from app.core.rate_limit import limiter
-
-        storage = getattr(limiter, "_storage", None)
-        if storage is not None:
-            if hasattr(storage, "storage"):
-                storage.storage.clear()
-            # Also try the limits storage reset
-            if hasattr(storage, "reset"):
-                storage.reset()
-    except Exception:
-        pass
+    """Clear rate limiter storage between tests (memory + Redis)."""
+    _clear_limiter()
     yield
+    _clear_limiter()
+
+
+def _clear_limiter() -> None:
+    """Best-effort cleanup of slowapi keys in Redis or memory."""
+    try:
+        import redis
+
+        from app.core.config import get_settings
+
+        r = redis.from_url(get_settings().redis_url, decode_responses=True)
+        for pattern in ("LIMITER/*", "slowapi/*"):
+            for key in r.scan_iter(pattern, count=100):
+                r.delete(key)
+    except Exception:
+        try:
+            from app.core.rate_limit import limiter
+
+            storage = getattr(limiter, "_storage", None)
+            if storage is not None and hasattr(storage, "storage"):
+                storage.storage.clear()
+        except Exception:
+            pass
 
 
 @pytest.fixture(scope="session")
