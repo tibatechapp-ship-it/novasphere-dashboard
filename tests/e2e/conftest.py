@@ -48,5 +48,5 @@ def logged_in_page(page):
 
     # 3) navigate
     page.goto("/")
-    page.wait_for_load_state("networkidle", timeout=20000)
+    page.wait_for_load_state("domcontentloaded", timeout=20000)
     return page
