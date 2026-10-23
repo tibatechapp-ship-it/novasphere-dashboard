@@ -8,34 +8,27 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15          # ← يمنع التعليق 6 ساعات
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.47.0-jammy
+      options: --user root
     services:
       redis:
         image: redis:7-alpine
         ports: ["6379:6379"]
+
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12", cache: pip }
 
-      - run: pip install -r requirements.txt -r requirements-e2e.txt
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('requirements-e2e.txt') }}
-
-      - name: Install Playwright Chromium
-        timeout-minutes: 5       # ← يقتل apt المعلّق بعد 5 دقائق
-        run: playwright install --with-deps chromium
+      - name: Install Python deps
+        run: pip install -r requirements.txt -r requirements-e2e.txt
 
       - name: Start app + seed user
         env:
           JWT_SECRET_KEY: e2e-secret-32-chars-minimum-abcdefgh
           ENV: development
           MOCK_DATA: "true"
-          REDIS_URL: redis://localhost:6379/0
+          REDIS_URL: redis://redis:6379/0
         run: |
           alembic upgrade head
           uvicorn app.main:app --port 8080 &
