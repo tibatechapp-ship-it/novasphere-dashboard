@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Cookie, FastAPI, Form, WebSocket, WebSocketDisconnect
+from fastapi import Cookie, FastAPI, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -25,6 +25,25 @@ APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
 
 manager = ConnectionManager()
+
+# Simple in-memory rate limiter (fixed window per IP)
+import time as _rl_time
+_RL_BUCKET: dict[str, list[float]] = {}
+_RL_LIMIT = 20
+_RL_WINDOW = 60.0
+
+
+def _check_rate_limit(request: Request) -> None:
+    ip = request.client.host if request.client else "unknown"
+    now = _rl_time.time()
+    bucket = _RL_BUCKET.setdefault(ip, [])
+    # drop old
+    bucket[:] = [t for t in bucket if now - t < _RL_WINDOW]
+    if len(bucket) >= _RL_LIMIT:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=429, detail="too many requests")
+    bucket.append(now)
+
 AGENTS = [
     {"id": "A01", "name": "Profiler", "group": "core"},
     {"id": "A02", "name": "Analyst", "group": "core"},
@@ -144,7 +163,8 @@ async def index(ns_token: str | None = Cookie(default=None)) -> HTMLResponse | R
 
 
 @app.post("/api/auth/signup", response_model=None)
-async def signup(username: str = Form(...), password: str = Form(...)):
+async def signup(request: Request, username: str = Form(...), password: str = Form(...)):
+    _check_rate_limit(request)
     username = (username or "").strip()
     if len(username) < 3 or len(username) > 32:
         return {"ok": False, "error": "username must be 3-32 chars"}
@@ -159,7 +179,8 @@ async def signup(username: str = Form(...), password: str = Form(...)):
 
 
 @app.post("/api/auth/login", response_model=None)
-async def login(username: str = Form(...), password: str = Form(...)):
+async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    _check_rate_limit(request)
     token = authenticate(username, password)
     if not token:
         return {"ok": False, "error": "invalid credentials"}
@@ -204,7 +225,8 @@ async def recent_events(limit: int = 10, ns_token: str | None = Cookie(default=N
 
 
 @app.post("/api/ai/analyze", response_model=None)
-async def ai_analyze(payload: dict[str, Any], ns_token: str | None = Cookie(default=None)):
+async def ai_analyze(request: Request, payload: dict[str, Any], ns_token: str | None = Cookie(default=None)):
+    _check_rate_limit(request)
     if not get_user(ns_token):
         from fastapi import HTTPException
         raise HTTPException(status_code=401, detail="not authenticated")
