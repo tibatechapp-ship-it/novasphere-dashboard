@@ -1,4 +1,4 @@
-"""Playwright fixtures — resilient login (fresh state, handles both)."""
+"""Playwright fixtures — wait for Alpine hydration, login if needed."""
 
 import os
 
@@ -14,17 +14,23 @@ def browser_context_args(browser_context_args):
 
 @pytest.fixture
 def logged_in_page(page):
-    """Clear cookies → navigate → login if needed → wait for dashboard."""
+    """Wait for Alpine ready, then login via UI if form is visible."""
     page.context.clear_cookies()
     page.goto("/")
-    page.wait_for_load_state("networkidle", timeout=10000)
-    page.wait_for_timeout(500)
 
-    login_input = page.locator('input[name="username"]')
-    if login_input.is_visible(timeout=2000):
+    # 1) انتظر إشارة hydration من Alpine (بدل timeout أعمى)
+    page.wait_for_function(
+        "() => window.__alpineReady === true",
+        timeout=15000,
+    )
+
+    # 2) إن كان نموذج الدخول ظاهراً، سجّل الدخول
+    login_input = page.locator('input[name="username"]:visible')
+    if login_input.count() > 0:
         login_input.fill("e2euser")
-        page.fill('input[name="password"]', "secret123")
-        page.click('button[type="submit"]')
+        page.locator('input[name="password"]:visible').fill("secret123")
+        page.locator('button[type="submit"]:visible').click()
 
-    page.wait_for_selector('[data-testid="dashboard"]', state="visible", timeout=20000)
+    # 3) انتظر الـ dashboard (web-first — يعيد المحاولة تلقائياً)
+    page.locator('[data-testid="dashboard"]:visible').wait_for(state="visible", timeout=15000)
     return page
