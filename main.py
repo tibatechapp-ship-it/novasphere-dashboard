@@ -5,49 +5,25 @@ import asyncio
 import json
 import random
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from fastapi import Cookie, FastAPI, Form, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
 
 from auth import authenticate, create_user, get_user
+from config import ACCESS_TOKEN_EXPIRE_MINUTES
+from database import Base, SessionLocal, engine
+from models import Event, User
+from ws import ConnectionManager
 
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
 
-app = FastAPI(title="NovaSphere Dashboard", version="0.1.0")
-
-if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-
-class ConnectionManager:
-    def __init__(self) -> None:
-        self.active: list[WebSocket] = []
-
-    async def connect(self, ws: WebSocket) -> None:
-        await ws.accept()
-        self.active.append(ws)
-
-    def disconnect(self, ws: WebSocket) -> None:
-        if ws in self.active:
-            self.active.remove(ws)
-
-    async def broadcast(self, payload: dict[str, Any]) -> None:
-        dead: list[WebSocket] = []
-        for ws in list(self.active):
-            try:
-                await ws.send_json(payload)
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self.disconnect(ws)
-
-
 manager = ConnectionManager()
-
 AGENTS = [
     {"id": "A01", "name": "Profiler", "group": "core"},
     {"id": "A02", "name": "Analyst", "group": "core"},
@@ -63,12 +39,30 @@ AGENTS = [
 
 
 def _random_metrics() -> dict[str, Any]:
+    cpu = round(random.uniform(5, 95), 1)
+    mem = round(random.uniform(20, 85), 1)
+    rps = random.randint(10, 400)
+    lat = random.randint(5, 120)
+    events = []
+    msgs = [
+        "Agent A03 completed task #42",
+        "WebSocket client connected",
+        "CPU spike detected",
+        "Memory threshold 80%",
+        "New agent registered",
+        "Task queue drained",
+        "Crypto price tick: BTC/USD",
+        "Server temperature nominal",
+    ]
+    for _ in range(5):
+        lvl = random.choice(["info", "info", "warn", "error"])
+        events.append({"ts": time.time() - random.uniform(0, 30), "level": lvl, "msg": random.choice(msgs)})
     return {
         "ts": time.time(),
-        "cpu": round(random.uniform(5, 95), 1),
-        "mem": round(random.uniform(20, 85), 1),
-        "req_per_sec": random.randint(10, 400),
-        "latency_ms": random.randint(5, 120),
+        "cpu": cpu,
+        "mem": mem,
+        "req_per_sec": rps,
+        "latency_ms": lat,
         "agents": [
             {
                 "id": a["id"],
@@ -80,24 +74,43 @@ def _random_metrics() -> dict[str, Any]:
             }
             for a in AGENTS
         ],
-        "events": [
-            {
-                "ts": time.time() - random.uniform(0, 30),
-                "level": random.choice(["info", "info", "warn", "error"]),
-                "msg": random.choice(
-                    [
-                        "Agent A03 completed task #42",
-                        "WebSocket client connected",
-                        "CPU spike detected",
-                        "Memory threshold 80%",
-                        "New agent registered",
-                        "Task queue drained",
-                    ]
-                ),
-            }
-            for _ in range(5)
-        ],
+        "events": events,
     }
+
+
+async def background_generator() -> None:
+    """Broadcast live metrics every second."""
+    while True:
+        payload = _random_metrics()
+        # persist a couple of events
+        try:
+            db: Session = SessionLocal()
+            for ev in payload["events"][:2]:
+                db.add(Event(level=ev["level"], message=ev["msg"], metric_cpu=payload["cpu"], metric_mem=payload["mem"], metric_rps=payload["req_per_sec"]))
+            db.commit()
+            db.close()
+        except Exception:
+            pass
+        await manager.broadcast(payload)
+        await asyncio.sleep(1.0)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    task = asyncio.create_task(background_generator())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
+app = FastAPI(title="NovaSphere Dashboard", version="0.2.0", lifespan=lifespan)
+
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -123,9 +136,9 @@ async def signup(username: str = Form(...), password: str = Form(...)):
     ok, msg = create_user(username, password)
     if not ok:
         return {"ok": False, "error": msg}
-    resp = RedirectResponse(url="/", status_code=303)
-    resp.set_cookie("ns_token", msg, httponly=True, samesite="lax", max_age=86400)
-    return {"ok": True, "token": msg}
+    resp = JSONResponse({"ok": True, "token": msg})
+    resp.set_cookie("ns_token", msg, httponly=True, samesite="lax", max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+    return resp
 
 
 @app.post("/api/auth/login", response_model=None)
@@ -133,16 +146,16 @@ async def login(username: str = Form(...), password: str = Form(...)):
     token = authenticate(username, password)
     if not token:
         return {"ok": False, "error": "invalid credentials"}
-    resp = RedirectResponse(url="/", status_code=303)
-    resp.set_cookie("ns_token", token, httponly=True, samesite="lax", max_age=86400)
-    return {"ok": True, "token": token}
+    resp = JSONResponse({"ok": True, "token": token})
+    resp.set_cookie("ns_token", token, httponly=True, samesite="lax", max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+    return resp
 
 
 @app.post("/api/auth/logout", response_model=None)
 async def logout():
-    resp = RedirectResponse(url="/login", status_code=303)
+    resp = JSONResponse({"ok": True})
     resp.delete_cookie("ns_token")
-    return {"ok": True}
+    return resp
 
 
 @app.get("/api/auth/me")
@@ -155,7 +168,19 @@ async def me(ns_token: str | None = Cookie(default=None)):
 
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
-    return {"ok": True, "service": "novasphere", "version": "0.1.0", "clients": len(manager.active)}
+    return {"ok": True, "service": "novasphere", "version": "0.2.0", "clients": manager.count}
+
+
+@app.get("/api/events")
+async def recent_events(limit: int = 10):
+    db: Session = SessionLocal()
+    try:
+        rows = db.query(Event).order_by(Event.ts.desc()).limit(limit).all()
+        return {"ok": True, "events": [
+            {"id": r.id, "ts": r.ts.timestamp(), "level": r.level, "msg": r.message} for r in rows
+        ]}
+    finally:
+        db.close()
 
 
 @app.post("/api/ai/analyze", response_model=None)
@@ -163,17 +188,16 @@ async def ai_analyze(payload: dict[str, Any]):
     events = payload.get("events", []) or []
     metrics = payload.get("metrics", {}) or {}
     last = events[-10:]
-    levels = {}
+    levels: dict[str, int] = {}
     for ev in last:
         lvl = ev.get("level", "info")
         levels[lvl] = levels.get(lvl, 0) + 1
     msgs = [str(ev.get("msg", "")) for ev in last]
-    errors = [m for m in msgs if "error" in m.lower() or "spike" in m.lower() or "threshold" in m.lower()]
     cpu = metrics.get("cpu")
     mem = metrics.get("mem")
     rps = metrics.get("req_per_sec")
     lat = metrics.get("latency_ms")
-    insights = []
+    insights: list[str] = []
     if levels.get("error", 0) > 0:
         insights.append(f"Detected {levels['error']} error event(s) in the last 10 — investigate immediately.")
     if levels.get("warn", 0) > 0:
@@ -188,10 +212,9 @@ async def ai_analyze(payload: dict[str, Any]):
         insights.append(f"High throughput ({rps} req/s) — ensure rate limits are in place.")
     if not insights:
         insights.append("System looks healthy — no anomalies in the last 10 events.")
-    summary = " | ".join(insights)
     return {
         "ok": True,
-        "summary": summary,
+        "summary": " | ".join(insights),
         "insights": insights,
         "stats": {"events": len(last), "levels": levels, "cpu": cpu, "mem": mem, "rps": rps, "latency": lat},
     }
@@ -202,8 +225,7 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     await manager.connect(ws)
     try:
         while True:
-            await ws.send_json(_random_metrics())
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(3600)
     except WebSocketDisconnect:
         manager.disconnect(ws)
     except Exception:

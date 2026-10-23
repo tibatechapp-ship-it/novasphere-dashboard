@@ -1,23 +1,19 @@
-"""NovaSphere auth — JWT (HS256, stdlib) + bcrypt password hashing."""
+"""Auth: JWT (HS256, stdlib) + bcrypt, backed by SQLAlchemy User model."""
 from __future__ import annotations
 
 import base64
 import hashlib
 import hmac
 import json
-import os
-import secrets
 import time
-from pathlib import Path
-from typing import Any
+from typing import Optional
 
 import bcrypt
+from sqlalchemy.orm import Session
 
-SECRET = os.environ.get("NOVASPHERE_SECRET", "novasphere-dev-secret-change-me")
-JWT_ALG = "HS256"
-TOKEN_TTL = 60 * 60 * 24  # 24h
-
-USERS_FILE = Path(__file__).resolve().parent / "data" / "users.json"
+from config import ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY
+from database import SessionLocal
+from models import User
 
 
 def _b64url_encode(data: bytes) -> str:
@@ -30,21 +26,27 @@ def _b64url_decode(s: str) -> bytes:
 
 
 def create_token(username: str) -> str:
-    header = {"alg": JWT_ALG, "typ": "JWT"}
-    payload = {"sub": username, "iat": int(time.time()), "exp": int(time.time()) + TOKEN_TTL}
+    header = {"alg": "HS256", "typ": "JWT"}
+    payload = {
+        "sub": username,
+        "iat": int(time.time()),
+        "exp": int(time.time()) + ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    }
     h = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
     p = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode())
-    sig = hmac.new(SECRET.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest()
+    sig = hmac.new(SECRET_KEY.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest()
     return f"{h}.{p}.{_b64url_encode(sig)}"
 
 
-def verify_token(token: str) -> str | None:
+def verify_token(token: Optional[str]) -> Optional[str]:
+    if not token:
+        return None
     try:
         parts = token.split(".")
         if len(parts) != 3:
             return None
         h, p, s = parts
-        sig = hmac.new(SECRET.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest()
+        sig = hmac.new(SECRET_KEY.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest()
         if not hmac.compare_digest(_b64url_encode(sig), s):
             return None
         payload = json.loads(_b64url_decode(p))
@@ -66,19 +68,8 @@ def check_password(password: str, hashed: str) -> bool:
         return False
 
 
-# ---- user store (file-backed) ----
-def _load_users() -> dict[str, str]:
-    try:
-        if USERS_FILE.exists():
-            return json.loads(USERS_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        pass
-    return {}
-
-
-def _save_users(users: dict[str, str]) -> None:
-    USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    USERS_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
+def get_db_session() -> Session:
+    return SessionLocal()
 
 
 def create_user(username: str, password: str) -> tuple[bool, str]:
@@ -87,29 +78,28 @@ def create_user(username: str, password: str) -> tuple[bool, str]:
         return False, "username and password required"
     if len(password) < 4:
         return False, "password too short (min 4)"
-    users = _load_users()
-    if username in users:
-        return False, "user already exists"
-    users[username] = hash_password(password)
-    _save_users(users)
-    return True, create_token(username)
+    db = get_db_session()
+    try:
+        if db.query(User).filter(User.username == username).first():
+            return False, "user already exists"
+        user = User(username=username, hashed_password=hash_password(password))
+        db.add(user)
+        db.commit()
+        return True, create_token(username)
+    finally:
+        db.close()
 
 
-def authenticate(username: str, password: str) -> str | None:
-    users = _load_users()
-    hashed = users.get(username.strip())
-    if not hashed:
-        return None
-    if not check_password(password, hashed):
-        return None
-    return create_token(username.strip())
+def authenticate(username: str, password: str) -> Optional[str]:
+    db = get_db_session()
+    try:
+        user = db.query(User).filter(User.username == username.strip()).first()
+        if not user or not check_password(password, user.hashed_password):
+            return None
+        return create_token(username.strip())
+    finally:
+        db.close()
 
 
-def get_user(token: str | None) -> str | None:
-    if not token:
-        return None
+def get_user(token: Optional[str]) -> Optional[str]:
     return verify_token(token)
-
-
-def random_secret() -> str:
-    return secrets.token_hex(32)
