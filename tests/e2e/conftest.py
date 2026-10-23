@@ -44,6 +44,5 @@ def logged_in_page(page):
     # Navigate and wait
     page.goto("/")
     page.wait_for_load_state("domcontentloaded", timeout=20000)
-    page.wait_for_timeout(2000)
 
     return page

@@ -31,8 +31,8 @@ CRITICAL_PAYLOAD = {
 
 def _intercept_insights(page: Page, payload: dict) -> None:
     """Force deterministic /api/insights response."""
-    page.route(
-        "**/api/insights*",
+    page.context.route(
+        "**/api/insights",
         lambda route: route.fulfill(
             status=200,
             content_type="application/json",
@@ -46,7 +46,7 @@ def test_runbook_card_renders(logged_in_page: Page):
     page = logged_in_page
     _intercept_insights(page, CRITICAL_PAYLOAD)
     page.reload()
-    page.wait_for_timeout(5000)
+    page.wait_for_selector('[data-testid="runbook-card"]', timeout=10000)
     expect(page.locator('[data-testid="severity-badge"]')).to_have_text("CRITICAL")
     steps = page.locator('[data-testid="runbook-step"]')
     expect(steps).to_have_count(3)
