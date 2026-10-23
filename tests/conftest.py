@@ -21,7 +21,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_DB_FILE}"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-32-chars-minimum-abcdef"
 os.environ["ENV"] = "development"
 os.environ["MOCK_DATA"] = "false"
-os.environ["REDIS_URL"] = "redis://localhost:6379/15"
+os.environ["REDIS_URL"] = "redis://localhost:6399/15"
 
 
 def pytest_configure(config):
